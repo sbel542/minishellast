@@ -45,7 +45,7 @@ t_ast_node *parse_command(char **tokens, int *token_pos)
 	t_ast_node *arg_list = NULL;
 	t_ast_node *last_arg = NULL;
 
-	while (tokens[*token_pos] && strcmp(tokens[*token_pos], "|") != 0 && strcmp(tokens[*token_pos], ">") != 0)
+	while (tokens[*token_pos] && ft_strncmp(tokens[*token_pos], "|", ft_strlen(tokens[*token_pos])) != 0 && ft_strncmp(tokens[*token_pos], ">", ft_strlen(tokens[*token_pos])) != 0)
 	{
 		t_ast_node *arg_node = create_node(ARGUMENT, tokens[*token_pos]);
 		(*token_pos)++;
