@@ -6,6 +6,7 @@
 
 #define MAX_TOKENS 1024
 
+
 typedef enum e_char_type {
 	CHAR_WHITESPACE,
 	CHAR_ALPHA,
