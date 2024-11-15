@@ -1,7 +1,20 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   lexer.c                                            :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sbelcher <sbelcher@student.42london.com>   +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2024/11/15 15:20:53 by sbelcher          #+#    #+#             */
+/*   Updated: 2024/11/15 15:20:54 by abelov           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <readline.h>
 #include "libft/libft.h"
 
 #define MAX_TOKENS 1024
@@ -128,23 +141,26 @@ t_token **tokenize_input(const char *input)
 	return tokens;
 }
 
-int main(int argc, char **argv)
+int main(void)
 {
 	int i;
-	t_token **tokens;
+	t_token	**tokens;
+	char	*line = NULL;
+	char	ps[1024];
 
-	if (argc < 2) {
-		ft_printf("Usage: %s <command>\n", argv[0]);
-		return (1);
-	}
-	tokens = tokenize_input(argv[1]);
-	i = 0;
-	while (tokens[i] != NULL)
+	sprintf(ps, "> ");
+
+	line = readline(ps);
+	while (line)
 	{
-		ft_printf("Token Type: %d, Value: %s\n", tokens[i]->type, tokens[i]->value);
-		i++;
+		tokens = tokenize_input(line);
+		i = -1;
+		while (tokens[++i] != NULL)
+			ft_printf("Token Type: %d, Value: %s\n", tokens[i]->type,
+					  tokens[i]->value);
+		free_tokens(tokens);
+		sprintf(ps, "> ");
+		line = readline(ps);
 	}
-
-	free_tokens(tokens);
 	return (0);
 }
