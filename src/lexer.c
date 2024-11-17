@@ -19,23 +19,16 @@
 
 #define MAX_TOKENS 1024
 
-
-typedef enum e_char_type {
-	CHAR_WHITESPACE,
-	CHAR_ALPHA,
-	CHAR_DIGIT,
-	CHAR_SPECIAL,
-	CHAR_QUOTE,
-	CHAR_OTHER
-} t_char_type;
-
 typedef enum e_token_type {
 	TOKEN_COMMAND,
-	TOKEN_ARGUMENT,
+	TOKEN_WORD,
 	TOKEN_PIPE,
 	TOKEN_REDIRECT_OUT,
 	TOKEN_REDIRECT_IN,
+	TOKEN_HERE_DOC,
+	TOKEN_APPEND,
 	TOKEN_STRING,
+	TOKEN_BLANK,
 	TOKEN_END
 } t_token_type;
 
@@ -44,123 +37,247 @@ typedef struct s_token {
 	char *value;
 } t_token;
 
-t_char_type get_char_type(char c)
-{
-	if (isspace(c))
-		return (CHAR_WHITESPACE);
-	if (ft_isalpha(c))
-		return (CHAR_ALPHA);
-	if (ft_isdigit(c))
-		return (CHAR_DIGIT);
-	if (c == '|' || c == '<' || c == '>')
-		return (CHAR_SPECIAL);
-	if (c == '"' || c == '\'')
-		return (CHAR_QUOTE);
-	return (CHAR_OTHER);
-}
+typedef enum e_state {
+	INITIAL,
+	READING_WORD,
+	IN_SINGLE_QUOTE,
+	IN_DOUBLE_QUOTE,
+	CHECK_APPEND,
+	CHECK_HERE_DOC,
+	READING_WHITESPACE,
+	END
+} t_state;
 
-t_token *create_token(t_token_type type, const char *value)
+
+typedef struct
+{
+	int token_id;
+	const char *str;
+} lt_entry;
+
+lt_entry lt[12] = {
+	{ .token_id = TOKEN_COMMAND,		.str = "TOKEN_COMMAND" },
+	{ .token_id = TOKEN_WORD,			.str = "TOKEN_WORD" },
+	{ .token_id = TOKEN_PIPE,			.str = "TOKEN_PIPE" },
+	{ .token_id = TOKEN_REDIRECT_OUT,	.str = "TOKEN_REDIRECT_OUT" },
+	{ .token_id = TOKEN_REDIRECT_IN,	.str = "TOKEN_REDIRECT_IN" },
+	{ .token_id = TOKEN_HERE_DOC,		.str = "TOKEN_HERE_DOC" },
+	{ .token_id = TOKEN_APPEND,			.str = "TOKEN_APPEND" },
+	{ .token_id = TOKEN_STRING,			.str = "TOKEN_STRING" },
+	{ .token_id = TOKEN_BLANK,			.str = "TOKEN_BLANK" },
+	{ .token_id = TOKEN_END,			.str = "TOKEN_END" }
+};
+
+typedef struct s_lexer {
+	char buffer[1024];
+	int buf_index;
+	t_token *tokens[MAX_TOKENS];
+	int token_count;
+} t_lexer;
+
+t_token *create_token(t_token_type type, const char *value, t_lexer *lexer)
 {
 	t_token *token = malloc(sizeof(t_token));
 	if (!token) return NULL;
 	token->type = type;
-	token->value = ft_strdup(value);
+	token->value = strdup(value);
+	lexer->token_count++;
 	return (token);
 }
 
-void free_tokens(t_token **tokens)
+void flush_buffer(t_lexer *lexer, t_token_type type)
 {
-	int i = 0;
-	while (tokens[i] != NULL)
+    if (lexer->buf_index > 0)
 	{
-		free(tokens[i]->value);
-		free(tokens[i]);
-		i++;
-	}
-	free(tokens);
+        lexer->buffer[lexer->buf_index] = '\0';
+        lexer->tokens[lexer->token_count] = create_token(type, lexer->buffer, lexer);
+        lexer->buf_index = 0;
+    }
 }
 
-t_token **tokenize_input(const char *input)
+void	free_tokens(t_lexer *lexer)
 {
-	t_token **tokens = malloc(sizeof(t_token *) * MAX_TOKENS);
-	int token_count = 0;
-	char buffer[1024];
-	int buf_index = 0;
-	char current_quote = 0;
-	int i = 0;
+    int	i;
 
-	while (input[i] != '\0')
+	i = -1;
+    while (++i < lexer->token_count)
 	{
-		t_char_type char_type = get_char_type(input[i]);
-		if (current_quote != 0)
-		{
-			if (input[i] == current_quote)
-				current_quote = 0;
-			else
-				buffer[buf_index++] = input[i];
-			i++;
-		}
-		else if (char_type == CHAR_QUOTE)
-			current_quote = input[i++];
-		else if (char_type == CHAR_WHITESPACE)
-		{
-			if (buf_index > 0)
-			{
-				buffer[buf_index] = '\0';
-				tokens[token_count++] = create_token(TOKEN_ARGUMENT, buffer);
-				buf_index = 0;
-			}
-			i++;
-		}
-		else if (char_type == CHAR_SPECIAL)
-		{
+        free(lexer->tokens[i]->value);
+        free(lexer->tokens[i]);
+    }
+}
+
+t_state	handle_initial(char c, t_lexer *lexer)
+{
+	if (isspace(c))
+	{
+		lexer->tokens[lexer->token_count] = create_token(TOKEN_BLANK, " ", lexer);
+	  return (READING_WHITESPACE);
+	}
+	else if (c == '\'')
+	  return (IN_SINGLE_QUOTE);
+	else if (c == '"')
+	  return (IN_DOUBLE_QUOTE);
+	else if (c == '>')
+	  return (CHECK_APPEND);
+	else if (c == '<')
+	  return (CHECK_HERE_DOC);
+	else if (c == '|')
+	{
+	  lexer->tokens[lexer->token_count] = create_token(TOKEN_PIPE, "|", lexer);
+	  return (INITIAL);
+	}
+	lexer->buffer[lexer->buf_index++] = c;
+	return (READING_WORD);
+}
+
+t_state	handle_reading_word(char c, t_lexer *lexer)
+{
+	if (isspace(c))
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		lexer->tokens[lexer->token_count] = create_token(TOKEN_BLANK, " ", lexer);
+		return (INITIAL);
+	}
+	else if (c == '\'')
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		return (IN_SINGLE_QUOTE);
+	}
+	else if (c == '"')
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		return (IN_DOUBLE_QUOTE);
+	}
+	else if (c == '>')
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		return (CHECK_APPEND);
+	}
+	else if (c == '<')
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		return (CHECK_HERE_DOC);
+	}
+	else if (c == '|')
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		lexer->tokens[lexer->token_count] = create_token(TOKEN_PIPE, "|", lexer);
+		return (INITIAL);
+	}
+	lexer->buffer[lexer->buf_index++] = c;
+	return (READING_WORD);
+}
+
+t_state	handle_in_single_quote(char c, t_lexer *lexer)
+{
+	if (c == '\'')
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		return (INITIAL);
+	}
+	lexer->buffer[lexer->buf_index++] = c;
+	return (IN_SINGLE_QUOTE);
+}
+
+t_state	handle_in_double_quote(char c, t_lexer *lexer)
+{
+	if (c == '"')
+	{
 		
-			if (buf_index > 0)
-			{
-				buffer[buf_index] = '\0';
-				tokens[token_count++] = create_token(TOKEN_ARGUMENT, buffer);
-				buf_index = 0;
-			}
-			if (input[i] == '|')
-				tokens[token_count++] = create_token(TOKEN_PIPE, "|");
-			else if (input[i] == '>')
-				tokens[token_count++] = create_token(TOKEN_REDIRECT_OUT, ">");
-			else if (input[i] == '<')
-				tokens[token_count++] = create_token(TOKEN_REDIRECT_IN, "<");
-			i++;
-		}
-		else
-			buffer[buf_index++] = input[i++];
+		flush_buffer(lexer, TOKEN_WORD);
+		return (INITIAL);
 	}
-	if (buf_index > 0)
-	{
-		buffer[buf_index] = '\0';
-		tokens[token_count++] = create_token(TOKEN_ARGUMENT, buffer);
-	}
-	tokens[token_count] = NULL;
-	return tokens;
+	lexer->buffer[lexer->buf_index++] = c;
+	return (IN_DOUBLE_QUOTE);
 }
 
-int main(void)
+t_state	handle_check_append(char c, t_lexer *lexer)
+{
+	if (c == '>')
+	{
+		lexer->tokens[lexer->token_count] = create_token(TOKEN_APPEND, ">>", lexer);
+		return (INITIAL);
+	}
+	lexer->tokens[lexer->token_count] = create_token(TOKEN_REDIRECT_OUT, ">", lexer);
+	return (handle_initial(c, lexer));
+}
+
+t_state	handle_check_here_doc(char c, t_lexer *lexer)
+{
+	if (c == '<')
+	{
+		lexer->tokens[lexer->token_count] = create_token(TOKEN_HERE_DOC, "<<", lexer);
+		return (INITIAL);
+	}
+	lexer->tokens[lexer->token_count] = create_token(TOKEN_REDIRECT_IN, "<", lexer);
+	return (handle_initial(c, lexer));
+}
+
+t_state	handle_reading_whitespace(char c, t_lexer *lexer)
+{
+	if (c != ' ' && c != '\t')
+		return (handle_initial(c, lexer));
+	else
+		return READING_WHITESPACE;
+}
+
+const char *get_idstring(int token)
 {
 	int i;
-	t_token	**tokens;
-	char	*line = NULL;
+	const char *str = NULL;
+
+	i = -1;
+	while (++i < 11)
+	{
+		if (lt[i].token_id == token)
+		{
+			str = lt[i].str;
+			break ;
+		}
+	}
+	return str;
+}
+
+int	main()
+{
+	t_state	current_state;
+	int		i;
+	t_lexer lexer = { .buf_index = 0, .token_count = -1 };
 	char	ps[1024];
+	char	*line = NULL;
 
 	sprintf(ps, "> ");
 
 	line = readline(ps);
 	while (line)
 	{
-		tokens = tokenize_input(line);
 		i = -1;
-		while (tokens[++i] != NULL)
-			ft_printf("Token Type: %d, Value: %s\n", tokens[i]->type,
-					  tokens[i]->value);
-		free_tokens(tokens);
+		current_state = INITIAL;
+		while (line[++i] != '\0')
+		{
+			if (current_state == INITIAL)
+				current_state = handle_initial(line[i], &lexer);
+			else if (current_state == READING_WORD)
+				current_state = handle_reading_word(line[i], &lexer);
+			else if (current_state == IN_SINGLE_QUOTE)
+				current_state = handle_in_single_quote(line[i], &lexer);
+			else if (current_state == IN_DOUBLE_QUOTE)
+				current_state = handle_in_double_quote(line[i], &lexer);
+			else if (current_state == CHECK_APPEND)
+				current_state = handle_check_append(line[i], &lexer);
+			else if (current_state == CHECK_HERE_DOC)
+				current_state = handle_check_here_doc(line[i], &lexer);
+			else if (current_state == READING_WHITESPACE)
+				current_state = handle_reading_whitespace(line[i], &lexer);
+		}
+		flush_buffer(&lexer, TOKEN_WORD);
+		i = -1;
+		while (++i <= lexer.token_count)
+        	printf("Token Type: \"%s\", Value: %s\n", get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
+		free_tokens(&lexer);
 		sprintf(ps, "> ");
 		line = readline(ps);
 	}
-	return (0);
+    return (0);
 }
