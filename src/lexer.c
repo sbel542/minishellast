@@ -104,6 +104,7 @@ void	free_tokens(t_lexer *lexer)
 	{
         free(lexer->tokens[i]->value);
         free(lexer->tokens[i]);
+		lexer->token_count = 0;
     }
 }
 
@@ -216,7 +217,7 @@ t_state	handle_check_here_doc(char c, t_lexer *lexer)
 
 t_state	handle_reading_whitespace(char c, t_lexer *lexer)
 {
-	if (c != ' ' && c != '\t')
+	if (!isspace(c))
 		return (handle_initial(c, lexer));
 	else
 		return READING_WHITESPACE;
@@ -243,7 +244,7 @@ int	main()
 {
 	t_state	current_state;
 	int		i;
-	t_lexer lexer = { .buf_index = 0, .token_count = -1 };
+	t_lexer lexer = { .buf_index = 0, .token_count = 0 };
 	char	ps[1024];
 	char	*line = NULL;
 
@@ -273,7 +274,7 @@ int	main()
 		}
 		flush_buffer(&lexer, TOKEN_WORD);
 		i = -1;
-		while (++i <= lexer.token_count)
+		while (++i < lexer.token_count)
         	printf("Token Type: \"%s\", Value: %s\n", get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
 		free_tokens(&lexer);
 		sprintf(ps, "> ");
