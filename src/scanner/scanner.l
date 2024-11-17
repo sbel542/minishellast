@@ -1,13 +1,3 @@
-/*=======================================================================*/
-/* Project: mini shell                                                   */
-/* Module : shell scanner                                                */
-/*                                                                       */
-/* This program is free software: you can redistribute it and/or modify  */
-/* it under the terms of the GNU General Public License as published by  */
-/* the Free Software Foundation, either version 3 of the License, or     */
-/* any later version.                                                    */
-/*=======================================================================*/
-
 %top {
 /* ===================================================================== */
 /* Project: minishell                                                    */
@@ -15,103 +5,70 @@
 /* ===================================================================== */
 }
 
+/* option batch OU interactive */
+%option nostdinit noyywrap nounput noinput reentrant
+
 %{
 #include <stdlib.h>
-enum yytokentype
-{
-	WORD = 258,
-	NOTOKEN = 259,
-	NEWLINE = 260,
-	PIPE = 261,
-	DLESS = 262,
-	DGREAT = 263,
-	LESS = 264,
-	GREAT = 265
-};
-
-typedef struct
-{
-	int token_id;
-	const char *str;
-} lt_entry;
-
-lt_entry lt[12] = {
-	{ .token_id = WORD, .str =    "WORD" },
-	{ .token_id = NOTOKEN, .str = "NOTOKEN" },
-	{ .token_id = NEWLINE, .str = "NEWLINE" },
-	{ .token_id = PIPE, .str =    "PIPE" },
-	{ .token_id = DLESS, .str =   "DLESS" },
-	{ .token_id = DGREAT, .str =  "DGREAT" },
-	{ .token_id = LESS, .str =    "LESS" },
-	{ .token_id = GREAT, .str =    "GREAT" }
-};
-
-/* Value type.  */
-union YYSTYPE
-{
-	char *string_val;
-} yylval;
+#include <string.h>
+#include "scanner.h"
 
 %}
 
-/* option batch OU interactive */
-%option nostdinit
-%option noyywrap
-%option noinput
-%option nounput
+digit							[0-9]
+letter							[a-zA-Z]
+envVarName 						((_|{letter})(_|{letter}|{digit})*)
+parameterValue 					(({letter}|{digit}|[\-\\+:._%?*~/,])+)
+whitespace						[ \t]
+newLine							(\n)
+dollar							[$]
+setValueCharacter				[=]
+singleQuote						[']
+allButSingleQuote				[^']
+doubleQuote						["]
+allButdoubleQuote				[^"$]
+anyChar							(.|\n)
+pipeChar						[|]
+andChar							[&]
+gtChar							[>]
+gtgtChar						[>][>]
+ltChar							[<]
+semicolon						[;]
+
+%s SQUOTED DQUOTED
 
 %%
+<INITIAL><<EOF>>				{ yylval.string_val = NULL; fprintf(yyout, "%s\n", "End of input"); yyterminate(); return END_OF_FILE; }
+	 /* https://superuser.com/questions/895266/bind-a-key-to-newline-in-bash-without-submitting-command */
+<INITIAL>{newLine}{anyChar} 	{ yylval.string_val = NULL; return CHARS_AFTER_EOL; }
+<INITIAL>{newLine}				{ yylval.string_val = NULL; return EOL; }
+<INITIAL>{singleQuote}			{ yylval.string_val = NULL; BEGIN(SQUOTED); }
+<INITIAL>{doubleQuote}			{ yylval.string_val = NULL; BEGIN(DQUOTED); }
+<INITIAL>{pipeChar}{pipeChar}	{ yylval.string_val = NULL; return OR_LIST; }
+<INITIAL>{pipeChar}				{ yylval.string_val = NULL; return PIPE; }
+<INITIAL>{andChar}{andChar} 	{ yylval.string_val = NULL; return AND_LIST; }
+<INITIAL>{andChar}{gtChar}		{ yylval.string_val = NULL; return REDIRECT_OE; }
+<INITIAL>[2]{gtgtChar}			{ yylval.string_val = NULL; return REDIRECT_APPEND_E; }
+<INITIAL>{gtgtChar}				{ yylval.string_val = NULL; return REDIRECT_APPEND_O; }
+<INITIAL>[2]{gtChar}			{ yylval.string_val = NULL; return REDIRECT_E; }
+<INITIAL>{gtChar}				{ yylval.string_val = NULL; return REDIRECT_O; }
+<INITIAL>{ltChar}				{ yylval.string_val = NULL; return REDIRECT_IN; }
+<INITIAL>{ltChar}{ltChar}		{ yylval.string_val = NULL; return HEREDOC; }
+<INITIAL>{whitespace}+			{ yylval.string_val = NULL; return BLANK; }
+<INITIAL>{setValueCharacter}	{ yylval.string_val = strdup(yytext); return WORD; }
+<INITIAL>{dollar}{envVarName}	{ yylval.string_val = strdup(yytext + 1); return ENV_VAR; }
+<INITIAL>{dollar}				{ yylval.string_val = NULL; return DOLLAR_SIGN; }
+<INITIAL>{parameterValue}		{ yylval.string_val = strdup(yytext); return WORD; }
 
-[ \t]* 				{	/* Discard spaces and tabs */ }
-\n	 				{ yylval.string_val = NULL; return NEWLINE; }
-">"					{ yylval.string_val = NULL; return GREAT; }
-">>"				return DGREAT;
-"<"					return LESS;
-"<<"				return DLESS;
-"|"					return PIPE;
-"exit"				exit (0);
-[a-zA-Z0-9\[\]]*    {
-						yylval.string_val = strdup(yytext);
-						return WORD;
-					}
+<SQUOTED><<EOF>>				{ yylval.string_val = NULL; BEGIN(INITIAL); return UNEXPECTED_EOF; }
+<SQUOTED>{singleQuote}			{ yylval.string_val = NULL; BEGIN(INITIAL); }
+<SQUOTED>{allButSingleQuote}* 	{ yylval.string_val = strdup(yytext); return WORD; }
 
-\'[^\n\']*\'		{
-						/* handle arguments in quotes by stripping the quotes */
-						//yytext = (char *)(yytext+1); // drop the front quotes
-						//yytext[strlen(yytext) - 1] = '\0'; // drop the end quotes
-						yylval.string_val = strdup(yytext);
-						return WORD;
-					}
-.					{ return NOTOKEN; }
-<<EOF>>				{ fprintf(yyout, "%s\n", "Hey-ho!"); yyterminate(); }
+<DQUOTED><<EOF>>				{ yylval.string_val = NULL; BEGIN(INITIAL); return UNEXPECTED_EOF; }
+<DQUOTED>{doubleQuote}			{ yylval.string_val = NULL; BEGIN(INITIAL); }
+<DQUOTED>{dollar}{envVarName} 	{ yylval.string_val = strdup(yytext + 1);  return ENV_VAR; }
+<DQUOTED>{dollar}				{ yylval.string_val = NULL; return DOLLAR_SIGN; }
+<DQUOTED>{allButdoubleQuote}*	{ yylval.string_val = strdup(yytext); return WORD; }
+
+{anyChar}						{ yylval.string_val = NULL; return NOT_ACCEPTED_CHAR; }
 %%
-
-
-const char *get_string(int token)
-{
-	int i;
-	const char *str = NULL;
-
-	i = -1;
-	while (++i < 8)
-	{
-		if (lt[i].token_id == token)
-		{
-			str = lt[i].str;
-			break ;
-		}
-	}
-	return str;
-}
-
-int	main(void)
-{
-	int tok;
-	tok = yylex();
-	while(tok)
-	{
-		printf("\"%s\": \"%s\"\n", get_string(tok), yylval.string_val);
-		tok = yylex();
-	}
-	return (EXIT_SUCCESS);
-}

@@ -12,26 +12,33 @@
 
 PROGRAM			:= scanner
 
-OBJS = lex.yy.o
-SRCS = lex.yy.c
-
 CC				:= cc
 INC_DIR			=  ./include
-INCLUDE_FLAGS	:= -I. -I$(INC_DIR) -I/usr/include
+INCLUDE_FLAGS	:= -I. -I$(INC_DIR) -isystem /usr/include/readline
 OPTIMIZE_FLAGS	:= -O0
 DEBUG_FLAGS		:= -g3 -gdwarf-3
 MANDATORY_FLAGS	:= -Wall -Wextra -Werror -Wimplicit
 CFLAGS			= $(MANDATORY_FLAGS) $(DEBUG_FLAGS) $(OPTIMIZE_FLAGS) $(INCLUDE_FLAGS)
-LINK_FLAGS		:= -lfl
+LINK_FLAGS		:= -lfl -lreadline
 
+SRCS = lex.yy.c \
+		main.c
+OBJS = $(SRCS:.c=.o)
 
-all: $(PROGRAM)
+all: scanner
 
-.c.o: $(SRCS)
-	$(CC) $(CFLAGS) -c $*.c -o $@ -O
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@ -O
 
 lex.yy.c: scanner.l
-	flex -d $^
+	flex -d --header-file=lex.yy.h $^
 
-$(PROGRAM): $(OBJS)
+scanner: $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LINK_FLAGS)
+
+re: clean all
+
+clean:
+	rm -fv $(PROGRAM) $(OBJS) lex.yy.c
+
+.PHONY: clean re

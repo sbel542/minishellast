@@ -12,6 +12,7 @@
 
 minishell
 src/scanner/lex.yy.c
+src/scanner/lex.yy.h
 src/scanner/scanner
 
 # From https://stackoverflow.com/questions/15606955/:
