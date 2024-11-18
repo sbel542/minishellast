@@ -138,7 +138,7 @@ t_state	handle_reading_word(char c, t_lexer *lexer)
 	{
 		flush_buffer(lexer, TOKEN_WORD);
 		lexer->tokens[lexer->token_count] = create_token(TOKEN_BLANK, " ", lexer);
-		return (INITIAL);
+		return (READING_WHITESPACE);
 	}
 	else if (c == '\'')
 	{
@@ -249,7 +249,6 @@ int	main()
 	char	*line = NULL;
 
 	sprintf(ps, "> ");
-
 	line = readline(ps);
 	while (line)
 	{
