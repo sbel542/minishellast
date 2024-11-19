@@ -15,6 +15,16 @@ src/scanner/lex.yy.c
 src/scanner/lex.yy.h
 src/scanner/scanner
 
+src/parser/bonus/CUseParser
+src/parser/bonus/DisplayStructure
+src/parser/bonus/lexer.yy.c
+src/parser/bonus/lexer.yy.h
+src/parser/bonus/parser.tab.c
+src/parser/bonus/parser.tab.h
+src/parser/bonus/parser.yy.c
+src/parser/bonus/parser.output
+src/parser/bonus/UseParser
+
 # From https://stackoverflow.com/questions/15606955/:
 # If you want to list all the files currently being tracked:
 # `git ls-tree --full-tree --name-only -r HEAD`
