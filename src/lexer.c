@@ -10,44 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
-#include <readline.h>
-#include "libft/libft.h"
-
-#define MAX_TOKENS 1024
-
-typedef enum e_token_type {
-	TOKEN_COMMAND,
-	TOKEN_WORD,
-	TOKEN_PIPE,
-	TOKEN_REDIRECT_OUT,
-	TOKEN_REDIRECT_IN,
-	TOKEN_HERE_DOC,
-	TOKEN_APPEND,
-	TOKEN_STRING,
-	TOKEN_BLANK,
-	TOKEN_END
-} t_token_type;
-
-typedef struct s_token {
-	t_token_type type;
-	char *value;
-} t_token;
-
-typedef enum e_state {
-	INITIAL,
-	READING_WORD,
-	IN_SINGLE_QUOTE,
-	IN_DOUBLE_QUOTE,
-	CHECK_APPEND,
-	CHECK_HERE_DOC,
-	READING_WHITESPACE,
-	END
-} t_state;
-
+#include "minishell.h"
 
 typedef struct
 {
@@ -68,13 +31,6 @@ lt_entry lt[12] = {
 	{ .token_id = TOKEN_END,			.str = "TOKEN_END" }
 };
 
-typedef struct s_lexer {
-	char buffer[1024];
-	int buf_index;
-	t_token *tokens[MAX_TOKENS];
-	int token_count;
-} t_lexer;
-
 t_token *create_token(t_token_type type, const char *value, t_lexer *lexer)
 {
 	t_token *token = malloc(sizeof(t_token));
@@ -87,25 +43,25 @@ t_token *create_token(t_token_type type, const char *value, t_lexer *lexer)
 
 void flush_buffer(t_lexer *lexer, t_token_type type)
 {
-    if (lexer->buf_index > 0)
+	if (lexer->buf_index > 0)
 	{
-        lexer->buffer[lexer->buf_index] = '\0';
-        lexer->tokens[lexer->token_count] = create_token(type, lexer->buffer, lexer);
-        lexer->buf_index = 0;
-    }
+		lexer->buffer[lexer->buf_index] = '\0';
+		lexer->tokens[lexer->token_count] = create_token(type, lexer->buffer, lexer);
+		lexer->buf_index = 0;
+	}
 }
 
 void	free_tokens(t_lexer *lexer)
 {
-    int	i;
+	int	i;
 
 	i = -1;
-    while (++i < lexer->token_count)
+	while (++i < lexer->token_count)
 	{
-        free(lexer->tokens[i]->value);
-        free(lexer->tokens[i]);
+		free(lexer->tokens[i]->value);
+		free(lexer->tokens[i]);
 		lexer->token_count = 0;
-    }
+	}
 }
 
 t_state	handle_initial(char c, t_lexer *lexer)
@@ -240,13 +196,75 @@ const char *get_idstring(int token)
 	return str;
 }
 
-int	main()
+void	preprocess_tokens(t_token **tokens, int *token_count)
 {
-	t_state	current_state;
 	int		i;
+	int		j;
+	int		k;
+	int		start;
+	int		total_length;
+	char	*concatenated_value;
+	
+	i = 0;
+	j = 0;
+	while (i < *token_count)
+	{
+		if (tokens[i]->type == TOKEN_WORD)
+		{
+			start = i;
+			total_length = 0;
+			while (i < *token_count && tokens[i]->type == TOKEN_WORD)
+				total_length += ft_strlen(tokens[i++]->value);
+			concatenated_value = malloc(total_length + 1);
+			if (!concatenated_value)
+			{
+				ft_printf("Error: Memory allocation failed.\n");
+				exit(EXIT_FAILURE);
+			}
+			concatenated_value[0] = '\0';
+			k = start;
+			while (k < i)
+			{
+				strcat(concatenated_value, tokens[k]->value);
+				free(tokens[k]->value);
+				free(tokens[k++]);
+			}
+			tokens[j] = malloc(sizeof(t_token));
+			if (!tokens[j])
+			{
+				ft_printf("Error: Memory allocation failed.\n");
+				free(concatenated_value);
+				exit(EXIT_FAILURE);
+			}
+			tokens[j]->type = TOKEN_WORD;
+			tokens[j]->value = concatenated_value;
+			j++;
+		}
+		else if (tokens[i]->type != TOKEN_BLANK)
+		{
+			if (i != j)
+				tokens[j] = tokens[i];
+			j++;
+			i++;
+		}
+		else
+		{
+			free(tokens[i]->value);
+			free(tokens[i]);
+			i++;
+		}
+	}
+	*token_count = j;
+}
+
+int main(void)
+{
+	t_state current_state;
+	int i;
 	t_lexer lexer = { .buf_index = 0, .token_count = 0 };
-	char	ps[1024];
-	char	*line = NULL;
+	char ps[1024];
+	int	token_pos;
+	char *line = NULL;
 
 	sprintf(ps, "> ");
 	line = readline(ps);
@@ -272,12 +290,31 @@ int	main()
 				current_state = handle_reading_whitespace(line[i], &lexer);
 		}
 		flush_buffer(&lexer, TOKEN_WORD);
-		i = -1;
-		while (++i < lexer.token_count)
-        	printf("Token Type: \"%s\", Value: %s\n", get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
+		ft_printf("Tokens before preprocess:\n");
+		for (i = 0; i < lexer.token_count; i++)
+			printf("Token Type: \"%s\", Value: %s\n",
+				   get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
+		preprocess_tokens(lexer.tokens, &lexer.token_count);
+		printf("\n\nTokens after preprocess:\n");
+		for (i = 0; i < lexer.token_count; i++)
+			printf("Token Type: \"%s\", Value: %s\n",
+				   get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
+		token_pos = 0;
+		t_ast_node *ast = parse_pipeline(lexer.tokens, &token_pos);
+		if (!ast)
+		{
+			ft_printf("Error: Failed to parse the command.\n");
+			free_tokens(&lexer);
+			free(line);
+			line = readline(ps);
+		}
+		ft_printf("\n\nAbstract Syntax Tree:\n");
+		print_ast(ast, 0);
+		free_ast(ast);
 		free_tokens(&lexer);
-		sprintf(ps, "> ");
+		free(line);
 		line = readline(ps);
 	}
-    return (0);
+	free(line);
+	return (0);
 }

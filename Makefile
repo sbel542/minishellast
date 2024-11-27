@@ -24,7 +24,7 @@ LIBFT_LIB		=  $(LIBFT_DIR)/libft.a
 LIBS			:= $(LIBFT)
 LINK_FLAGS		:= -L $(LIBFT_DIR) -lft -lreadline
 
-SRCS			= src/lexer.c
+SRCS			= src/lexer.c src/parser.c
 
 BUILD_DIR		= build
 OBJS			= $(SRCS:%.c=$(BUILD_DIR)/%.o)
