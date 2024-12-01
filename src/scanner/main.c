@@ -12,7 +12,7 @@
 
 #include <readline.h>
 #include "scanner.h"
-#include "lex.yy.h"
+#include "lex.yy.c"
 
 lt_entry lt[21] = {
 		{ .token_id = NOT_ACCEPTED_CHAR, .str = "NOT_ACCEPTED_CHAR" },

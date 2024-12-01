@@ -52,12 +52,9 @@ t_ast_node	*parse_command(t_token **tokens, int *token_pos)
 	if (!tokens[*token_pos] || tokens[*token_pos]->type != TOKEN_WORD)
 		return (NULL);
 	command_node = malloc(sizeof(t_ast_node));
-	if (!command_node) return NULL;
-	command_node->type = NODE_COMMAND;
-	command_node->value = ft_strdup(tokens[*token_pos]->value);
-	command_node->left = NULL;
-	command_node->right = NULL;
-	command_node->next = NULL;
+	if (!command_node)
+		return (NULL);
+	command_node = create_node(NODE_COMMAND, tokens[*token_pos]->value, NULL, NULL, NULL);
 	(*token_pos)++;
 	t_ast_node *last_arg = NULL;
 	t_ast_node *last_redir = NULL;
@@ -71,11 +68,7 @@ t_ast_node	*parse_command(t_token **tokens, int *token_pos)
 				free_ast(command_node);
 				return (NULL);
 			}
-			arg_node->type = NODE_ARGUMENT;
-			arg_node->value = ft_strdup(tokens[*token_pos]->value);
-			arg_node->left = NULL;
-			arg_node->right = NULL;
-			arg_node->next = NULL;
+			arg_node = create_node(NODE_ARGUMENT, tokens[*token_pos]->value, NULL, NULL, NULL);
 			if (!command_node->left)
 				command_node->left = arg_node;
 			else
@@ -106,41 +99,46 @@ t_ast_node	*parse_command(t_token **tokens, int *token_pos)
 	return (command_node);
 }
 
-t_ast_node *parse_pipeline(t_token **tokens, int *token_pos) {
-    t_ast_node *command_node = parse_command(tokens, token_pos);
-    if (!command_node)
-        return NULL;
+t_ast_node *create_node(t_node_type type, char *value, t_ast_node *left, t_ast_node	*right, t_ast_node *next)
+{
+	t_ast_node	*node;
+ 
+	node = malloc(sizeof(t_ast_node));
+	node->type = type;
+	node->value = strdup(value);
+	node->left = left;
+	node->right = right;
+	node->next = next;
+	return (node);
+}
 
-    while (tokens[*token_pos] && tokens[*token_pos]->type == TOKEN_PIPE) {
-        (*token_pos)++; // Skip the '|'
-
-        t_ast_node *next_command = parse_command(tokens, token_pos);
-        if (!next_command) {
-            fprintf(stderr, "Syntax error: Expected command after '|'\n");
-            free_ast(command_node);
-            return NULL;
-        }
-
-        // Create a new PIPE node
-        t_ast_node *pipe_node = malloc(sizeof(t_ast_node));
-        if (!pipe_node) {
-            fprintf(stderr, "Error: Memory allocation failed.\n");
-            free_ast(command_node);
-            free_ast(next_command);
-            return NULL;
-        }
-
-        pipe_node->type = NODE_PIPE;
-        pipe_node->value = strdup("|");
-        pipe_node->left = command_node;
-        pipe_node->right = next_command;
-        pipe_node->next = NULL;
-
-        // Update command_node for further pipes
-        command_node = pipe_node;
-    }
-
-    return command_node;
+t_ast_node *parse_pipeline(t_token **tokens, int *token_pos)
+{
+	t_ast_node *command_node = parse_command(tokens, token_pos);
+	if (!command_node)
+		return (NULL);
+	while (tokens[*token_pos] && tokens[*token_pos]->type == TOKEN_PIPE)
+	{
+		(*token_pos)++;
+		t_ast_node *next_command = parse_command(tokens, token_pos);
+		if (!next_command)
+		{
+			ft_printf("Syntax error: Expected command after '|'\n");
+			free_ast(command_node);
+			return (NULL);
+		}
+		t_ast_node	*pipe_node = malloc(sizeof(t_ast_node));
+		if (!pipe_node)
+		{
+			ft_printf("Error: Memory allocation failed.\n");
+			free_ast(command_node);
+			free_ast(next_command);
+			return (NULL);
+		}
+		pipe_node = create_node(NODE_PIPE, "|", command_node, next_command, NULL);
+		command_node = pipe_node;
+	}
+	return (command_node);
 }
 
 void	print_redirections(t_ast_node *redir_node, int depth)
@@ -172,59 +170,59 @@ void	print_arguments(t_ast_node *arg_node, int depth)
 
 void print_ast(t_ast_node *node, int depth)
 {
-    if (!node)
-        return;
-    for (int i = 0; i < depth; i++)
-        printf("  ");
-    printf("%s: %s\n",
-           node->type == NODE_COMMAND ? "COMMAND" :
-           node->type == NODE_ARGUMENT ? "ARGUMENT" :
-           node->type == NODE_PIPE ? "PIPE" :
-           node->type == NODE_REDIRECT_OUT ? "REDIRECT_OUT" :
-           node->type == NODE_REDIRECT_IN ? "REDIRECT_IN" :
-           node->type == NODE_APPEND ? "APPEND" :
-           node->type == NODE_HERE_DOC ? "HERE_DOC" :
-           node->type == NODE_FILENAME ? "FILENAME" :
-           "UNKNOWN",
-           node->value ? node->value : "NULL");
+	if (!node)
+		return;
+	for (int i = 0; i < depth; i++)
+		printf("  ");
+	printf("%s: %s\n",
+		   node->type == NODE_COMMAND ? "COMMAND" :
+		   node->type == NODE_ARGUMENT ? "ARGUMENT" :
+		   node->type == NODE_PIPE ? "PIPE" :
+		   node->type == NODE_REDIRECT_OUT ? "REDIRECT_OUT" :
+		   node->type == NODE_REDIRECT_IN ? "REDIRECT_IN" :
+		   node->type == NODE_APPEND ? "APPEND" :
+		   node->type == NODE_HERE_DOC ? "HERE_DOC" :
+		   node->type == NODE_FILENAME ? "FILENAME" :
+		   "UNKNOWN",
+		   node->value ? node->value : "NULL");
 
-    if (node->type == NODE_COMMAND)
-    {
-        if (node->left)
-        {
-            for (int i = 0; i < depth + 1; i++)
-                printf("  ");
-            printf("Arguments:\n");
-            print_arguments(node->left, depth + 2);
-        }
-        if (node->right)
-        {
-            for (int i = 0; i < depth + 1; i++)
-                printf("  ");
-            printf("Redirections:\n");
-            print_redirections(node->right, depth + 2);
-        }
-    }
-    else if (node->type == NODE_PIPE)
-    {
-        if (node->left)
-        {
-            for (int i = 0; i < depth + 1; i++)
-                printf("  ");
-            printf("Left Command ->\n");
-            print_ast(node->left, depth + 2);
-        }
-        if (node->right)
-        {
-            for (int i = 0; i < depth + 1; i++)
-                printf("  ");
-            printf("Right Command ->\n");
-            print_ast(node->right, depth + 2);
-        }
-    }
+	if (node->type == NODE_COMMAND)
+	{
+		if (node->left)
+		{
+			for (int i = 0; i < depth + 1; i++)
+				printf("  ");
+			printf("Arguments:\n");
+			print_arguments(node->left, depth + 2);
+		}
+		if (node->right)
+		{
+			for (int i = 0; i < depth + 1; i++)
+				printf("  ");
+			printf("Redirections:\n");
+			print_redirections(node->right, depth + 2);
+		}
+	}
+	else if (node->type == NODE_PIPE)
+	{
+		if (node->left)
+		{
+			for (int i = 0; i < depth + 1; i++)
+				printf("  ");
+			printf("Left Command ->\n");
+			print_ast(node->left, depth + 2);
+		}
+		if (node->right)
+		{
+			for (int i = 0; i < depth + 1; i++)
+				printf("  ");
+			printf("Right Command ->\n");
+			print_ast(node->right, depth + 2);
+		}
+	}
 
-    if (node->next)
-        print_ast(node->next, depth);
+	if (node->next)
+		print_ast(node->next, depth);
 }
 
 void	free_arguments(t_ast_node *arg_node)

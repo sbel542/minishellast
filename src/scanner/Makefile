@@ -19,13 +19,12 @@ OPTIMIZE_FLAGS	:= -O0
 DEBUG_FLAGS		:= -g3 -gdwarf-3
 MANDATORY_FLAGS	:= -Wall -Wextra -Werror -Wimplicit
 CFLAGS			= $(MANDATORY_FLAGS) $(DEBUG_FLAGS) $(OPTIMIZE_FLAGS) $(INCLUDE_FLAGS)
-LINK_FLAGS		:= -lfl -lreadline
+LINK_FLAGS		:= -L/home/sbelcher/homebrew/opt/flex/lib -lfl -lreadline
 
-SRCS = lex.yy.c \
-		main.c
+SRCS = main.c
 OBJS = $(SRCS:.c=.o)
 
-all: scanner
+all: lex.yy.c scanner
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@ -O

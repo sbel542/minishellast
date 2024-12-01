@@ -79,6 +79,7 @@ const char	*get_idstring(int token);
 t_ast_node	*parse_redirection(t_token **tokens, int *token_pos);
 t_ast_node	*parse_command(t_token **tokens, int *token_pos);
 t_ast_node	*parse_pipeline(t_token **tokens, int *token_pos);
+t_ast_node	*create_node(t_node_type type, char *value, t_ast_node *left, t_ast_node	*right, t_ast_node *next);
 void		print_ast(t_ast_node *node, int depth);
 void		free_ast(t_ast_node *node);
 void		parse_command_details(t_token **tokens, int *token_pos, t_ast_node *command_node);

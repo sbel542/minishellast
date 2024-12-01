@@ -13,6 +13,13 @@
 #include <string.h>
 #include "scanner.h"
 
+/* Value type.  */
+union YYSTYPE
+{
+	char *string_val;
+} yylval;
+
+
 %}
 
 digit							[0-9]
@@ -40,7 +47,6 @@ semicolon						[;]
 %%
 <INITIAL><<EOF>>				{ yylval.string_val = NULL; fprintf(yyout, "%s\n", "End of input"); yyterminate(); return END_OF_FILE; }
 	 /* https://superuser.com/questions/895266/bind-a-key-to-newline-in-bash-without-submitting-command */
-<INITIAL>{newLine}{anyChar} 	{ yylval.string_val = NULL; return CHARS_AFTER_EOL; }
 <INITIAL>{newLine}				{ yylval.string_val = NULL; return EOL; }
 <INITIAL>{singleQuote}			{ yylval.string_val = NULL; BEGIN(SQUOTED); }
 <INITIAL>{doubleQuote}			{ yylval.string_val = NULL; BEGIN(DQUOTED); }

@@ -44,10 +44,4 @@ typedef struct
 	const char *str;
 } lt_entry;
 
-/* Value type.  */
-union YYSTYPE
-{
-	char *string_val;
-} yylval;
-
 #endif //SCANNER_H

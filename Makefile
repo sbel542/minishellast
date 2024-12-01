@@ -11,7 +11,7 @@
 # **************************************************************************** #
 
 NAME			:= minishell
-CC				:= cc
+CC				:= gcc
 INC_DIR			=  ./include
 INCLUDE_FLAGS	:= -I. -I$(INC_DIR) -I/usr/include -isystem /usr/include/readline
 OPTIMIZE_FLAGS	:= -O0
