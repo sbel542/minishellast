@@ -56,4 +56,3 @@ norm:
 		@$(MAKE) -C $(LIBFT_DIR) norm
 
 .PHONY: all clean fclean re bonus norm
-
