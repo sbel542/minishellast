@@ -291,12 +291,14 @@ int main(void)
 		}
 		flush_buffer(&lexer, TOKEN_WORD);
 		ft_printf("Tokens before preprocess:\n");
-		for (i = 0; i < lexer.token_count; i++)
+		i = -1;
+		while (++i < lexer.token_count)
 			printf("Token Type: \"%s\", Value: %s\n",
 				   get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
 		preprocess_tokens(lexer.tokens, &lexer.token_count);
 		printf("\n\nTokens after preprocess:\n");
-		for (i = 0; i < lexer.token_count; i++)
+		i = -1;
+		while (++i < lexer.token_count)
 			printf("Token Type: \"%s\", Value: %s\n",
 				   get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
 		token_pos = 0;
