@@ -28,6 +28,7 @@ lt_entry lt[12] = {
 	{ .token_id = TOKEN_APPEND,			.str = "TOKEN_APPEND" },
 	{ .token_id = TOKEN_STRING,			.str = "TOKEN_STRING" },
 	{ .token_id = TOKEN_BLANK,			.str = "TOKEN_BLANK" },
+	{ .token_id = TOKEN_VAR,			.str = "TOKEN_VAR" },
 	{ .token_id = TOKEN_END,			.str = "TOKEN_END" }
 };
 
@@ -71,6 +72,11 @@ t_state	handle_initial(char c, t_lexer *lexer)
 		lexer->tokens[lexer->token_count] = create_token(TOKEN_BLANK, " ", lexer);
 	  return (READING_WHITESPACE);
 	}
+	else if (c == '$')
+	{
+		lexer->buffer[lexer->buf_index++] = c;
+		return (VARIABLE);
+	}
 	else if (c == '\'')
 	  return (IN_SINGLE_QUOTE);
 	else if (c == '"')
@@ -90,7 +96,13 @@ t_state	handle_initial(char c, t_lexer *lexer)
 
 t_state	handle_reading_word(char c, t_lexer *lexer)
 {
-	if (isspace(c))
+	if (c == '$')
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		lexer->buffer[lexer->buf_index++] = c;
+		return (VARIABLE);
+	}
+	else if (isspace(c))
 	{
 		flush_buffer(lexer, TOKEN_WORD);
 		lexer->tokens[lexer->token_count] = create_token(TOKEN_BLANK, " ", lexer);
@@ -139,6 +151,13 @@ t_state	handle_in_single_quote(char c, t_lexer *lexer)
 
 t_state	handle_in_double_quote(char c, t_lexer *lexer)
 {
+	if (c == '$')
+	{
+		lexer->curent_string = '"';
+		flush_buffer(lexer, TOKEN_WORD);
+		lexer->buffer[lexer->buf_index++] = c;
+		return (VARIABLE);
+	}
 	if (c == '"')
 	{
 		
@@ -179,6 +198,37 @@ t_state	handle_reading_whitespace(char c, t_lexer *lexer)
 		return READING_WHITESPACE;
 }
 
+t_state	handle_variable(char c, t_lexer *lexer)
+{
+	if (lexer->buf_index == 1 && (ft_isalpha(c) || c == '_'))
+	{
+		lexer->buffer[lexer->buf_index++] = c;
+		return (VARIABLE);
+	}
+	else if (lexer->buf_index == 1 && !ft_isalpha(c) && c != '_')
+	{
+		flush_buffer(lexer, TOKEN_WORD);
+		return (handle_initial(c, lexer));
+	}
+	else if ((lexer->buf_index > 1) && (ft_isalnum(c) || c == '_'))
+	{
+		lexer->buffer[lexer->buf_index++] = c;
+		return (VARIABLE);
+	}
+	else
+	{
+		flush_buffer(lexer, TOKEN_VAR);
+		if (lexer->curent_string == '"')
+		{
+			lexer->curent_string = '0';
+			if (c == '"')
+				return (INITIAL);
+			return (handle_in_double_quote(c, lexer));
+		}
+		return (handle_initial(c, lexer));
+	}
+}
+
 const char *get_idstring(int token)
 {
 	int i;
@@ -196,17 +246,15 @@ const char *get_idstring(int token)
 	return str;
 }
 
-void	preprocess_tokens(t_token **tokens, int *token_count)
+void preprocess_tokens(t_token **tokens, int *token_count)
 {
-	int		i;
-	int		j;
-	int		k;
-	int		start;
-	int		total_length;
-	char	*concatenated_value;
-	
-	i = 0;
-	j = 0;
+	int i = 0;
+	int j = 0;
+	int k;
+	int start;
+	int total_length;
+	char *concatenated_value;
+
 	while (i < *token_count)
 	{
 		if (tokens[i]->type == TOKEN_WORD)
@@ -225,7 +273,7 @@ void	preprocess_tokens(t_token **tokens, int *token_count)
 			k = start;
 			while (k < i)
 			{
-				strcat(concatenated_value, tokens[k]->value);
+				ft_strlcat(concatenated_value, tokens[k]->value, total_length + 1);
 				free(tokens[k]->value);
 				free(tokens[k++]);
 			}
@@ -237,8 +285,7 @@ void	preprocess_tokens(t_token **tokens, int *token_count)
 				exit(EXIT_FAILURE);
 			}
 			tokens[j]->type = TOKEN_WORD;
-			tokens[j]->value = concatenated_value;
-			j++;
+			tokens[j++]->value = concatenated_value;
 		}
 		else if (tokens[i]->type != TOKEN_BLANK)
 		{
@@ -250,11 +297,32 @@ void	preprocess_tokens(t_token **tokens, int *token_count)
 		else
 		{
 			free(tokens[i]->value);
-			free(tokens[i]);
-			i++;
+			free(tokens[i++]);
 		}
 	}
 	*token_count = j;
+	tokens[j] = NULL;
+}
+
+void	expand_variables(t_token **tokens, int token_count)
+{
+	int	i;
+
+	i = -1;
+	while (++i < token_count)
+	{
+		if (tokens[i]->type == TOKEN_VAR)
+		{
+			const char *var_name = tokens[i]->value + 1;
+			char *expanded_value = getenv(var_name);
+			free(tokens[i]->value);
+			if (expanded_value)
+				tokens[i]->value = strdup(expanded_value);
+			else
+				tokens[i]->value = strdup("'Error: not a real var'");
+			tokens[i]->type = TOKEN_WORD;
+		}
+	}
 }
 
 int main(void)
@@ -270,6 +338,7 @@ int main(void)
 	line = readline(ps);
 	while (line)
 	{
+		lexer.curent_string = '0';
 		i = -1;
 		current_state = INITIAL;
 		while (line[++i] != '\0')
@@ -288,17 +357,24 @@ int main(void)
 				current_state = handle_check_here_doc(line[i], &lexer);
 			else if (current_state == READING_WHITESPACE)
 				current_state = handle_reading_whitespace(line[i], &lexer);
+			else if (current_state == VARIABLE)
+				current_state = handle_variable(line[i], &lexer);
 		}
+		if (current_state == VARIABLE)
+			flush_buffer(&lexer, TOKEN_VAR);
+		else if (lexer.buf_index != 0)
+			flush_buffer(&lexer, TOKEN_WORD);
 		flush_buffer(&lexer, TOKEN_WORD);
 		ft_printf("Tokens before preprocess:\n");
 		i = -1;
-		while (++i < lexer.token_count)
+		while (lexer.tokens[++i] != NULL)
 			printf("Token Type: \"%s\", Value: %s\n",
-				   get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
+		get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
+		expand_variables(lexer.tokens, lexer.token_count);
 		preprocess_tokens(lexer.tokens, &lexer.token_count);
 		printf("\n\nTokens after preprocess:\n");
 		i = -1;
-		while (++i < lexer.token_count)
+		while (lexer.tokens[++i] != NULL)
 			printf("Token Type: \"%s\", Value: %s\n",
 				   get_idstring(lexer.tokens[i]->type), lexer.tokens[i]->value);
 		token_pos = 0;

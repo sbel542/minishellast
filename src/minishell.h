@@ -20,7 +20,8 @@ typedef enum e_token_type {
 	TOKEN_APPEND,
 	TOKEN_STRING,
 	TOKEN_BLANK,
-	TOKEN_END
+	TOKEN_END,
+	TOKEN_VAR
 } t_token_type;
 
 typedef struct s_token {
@@ -36,12 +37,14 @@ typedef enum e_state {
 	CHECK_APPEND,
 	CHECK_HERE_DOC,
 	READING_WHITESPACE,
-	END
+	END,
+	VARIABLE
 } t_state;
 
 typedef struct s_lexer {
 	char buffer[1024];
 	int buf_index;
+	char	curent_string;
 	t_token *tokens[MAX_TOKENS];
 	int token_count;
 } t_lexer;
@@ -71,6 +74,7 @@ void		free_tokens(t_lexer *lexer);
 t_state		handle_initial(char c, t_lexer *lexer);
 t_state		handle_reading_word(char c, t_lexer *lexer);
 t_state		handle_in_single_quote(char c, t_lexer *lexer);
+t_state		handle_variable(char c, t_lexer *lexer);
 t_state		handle_in_double_quote(char c, t_lexer *lexer);
 t_state		handle_check_append(char c, t_lexer *lexer);
 t_state		handle_check_here_doc(char c, t_lexer *lexer);
